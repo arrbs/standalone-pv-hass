@@ -1,0 +1,57 @@
+A Firebeetle 2 ESP32-C6 unit.
+
+ESP Home, reporting to Home Assistant through wifi.
+
+Has an ADS1115 on SDA GPIO19 and SCL GPIO20
+LED on GPIO15
+
+Reads the ISC of a solar panel through a 50A 75Mv Shunt between A0 and A1 on the ADS.
+
+Connects to wifi in an efficient way and sends the data to home assistant.
+Data includes ISC, Battery Percentage and MCU temperature.
+
+Goes to sleep for 10 seconds
+
+Wakes up and does it again.
+
+Very simple, no extraneous components.
+
+At the moment there's a bug with deep sleep that makes it need that you need to add the following
+
+external_components:
+  - source: github://pr#10345
+    components: [deep_sleep]
+    refresh: 1h
+
+
+
+
+Example for batter percentage
+sensor:
+  - platform: adc
+    id: vbat_adc
+    name: "VBAT (V)"
+    pin: GPIO0
+    attenuation: 12db
+    update_interval: never
+    filters:
+      - multiply: 2.0
+      - sliding_window_moving_average:
+          window_size: 4
+          send_every: 4
+
+  - platform: template
+    id: batt_pct
+    name: "Battery %"
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    update_interval: never
+    lambda: |-
+      float v = id(vbat_adc).state;
+      if (v <= 0.0f) return NAN;
+      const float vmin = 3.30f;
+      const float vmax = 4.20f;
+      if (v <= vmin) return 0.0f;
+      if (v >= vmax) return 100.0f;
+      float x = (v - vmin) / (vmax - vmin);
+      return 100.0f * (x * x * (3 - 2 * x));
